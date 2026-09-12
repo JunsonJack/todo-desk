@@ -82,6 +82,8 @@ function registerIpc() {
   ipcMain.handle('note-categories:delete', (_e, id) => db.deleteNoteCategory(id));
 
   ipcMain.handle('stats:get', () => db.getStats());
+  ipcMain.handle('data:export', () => db.exportAllData());
+  ipcMain.handle('data:import', (_e, payload) => db.importAllData(payload?.payload ?? payload, payload?.mode || 'replace'));
 }
 
 const gotLock = app.requestSingleInstanceLock();

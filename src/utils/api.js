@@ -50,6 +50,16 @@ export const API = {
   stats: {
     get: () => window.api.stats.get(),
   },
+  data: {
+    exportAll: async () => {
+      if (!window.api?.data?.export) throw new Error('导出接口未加载，请完全退出并重启应用');
+      return window.api.data.export();
+    },
+    importAll: async (payload, mode = 'replace') => {
+      if (!window.api?.data?.import) throw new Error('导入接口未加载，请完全退出并重启应用');
+      return window.api.data.import(payload, mode);
+    },
+  },
   notes: {
     list: async (filters) => {
       if (!window.api?.notes?.list) throw new Error('琐事接口未加载，请完全退出并重启应用');

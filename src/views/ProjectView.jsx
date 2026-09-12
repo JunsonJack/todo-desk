@@ -65,10 +65,11 @@ export default function ProjectView({
             ) : null}
             <button
               type="button"
-              className="btn primary"
+              className="btn create"
               onClick={() => onCreateTask(isUngrouped ? {} : { project_id: activeProject.id })}
             >
-              + 新建任务
+              <span className="btn-plus" aria-hidden="true">+</span>
+              新建任务
             </button>
           </div>
         </header>

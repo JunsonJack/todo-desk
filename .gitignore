@@ -39,6 +39,9 @@ Thumbs.db
 *.db
 *.db-shm
 *.db-wal
+scripts/find-import.cjs
+scripts/replace-import.cjs
+scripts/inspect-db.cjs
 
 # Electron
 *.asar

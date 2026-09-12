@@ -39,4 +39,8 @@ contextBridge.exposeInMainWorld('api', {
   stats: {
     get: () => ipcRenderer.invoke('stats:get'),
   },
+  data: {
+    export: () => ipcRenderer.invoke('data:export'),
+    import: (payload, mode = 'replace') => ipcRenderer.invoke('data:import', { payload, mode }),
+  },
 });

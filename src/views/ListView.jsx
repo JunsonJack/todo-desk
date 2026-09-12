@@ -45,7 +45,10 @@ export default function ListView({
           <h1>任务列表</h1>
           <p className="muted">全部任务总览 · 未完成 {openCount} / 共 {tasks.length}</p>
         </div>
-        <button type="button" className="btn primary" onClick={onCreate}>+ 新建任务</button>
+        <button type="button" className="btn create" onClick={onCreate}>
+          <span className="btn-plus" aria-hidden="true">+</span>
+          新建任务
+        </button>
       </header>
 
       <div className="filter-bar">

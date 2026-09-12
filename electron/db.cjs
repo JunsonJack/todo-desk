@@ -656,6 +656,216 @@ function closeDb() {
   }
 }
 
+function exportAllData() {
+  const now = new Date().toISOString();
+  return {
+    app: 'todo-desk',
+    schema_version: 1,
+    exported_at: now,
+    data: {
+      projects: db.prepare('SELECT id, name, color, created_at FROM projects ORDER BY id').all(),
+      priorities: db.prepare('SELECT id, code, name, color, sort_order, created_at FROM priorities ORDER BY sort_order, id').all(),
+      tasks: db.prepare(`
+        SELECT id, title, description, status, priority, due_date, project_id,
+               completed_at, created_at, updated_at
+        FROM tasks ORDER BY id
+      `).all(),
+      note_categories: db.prepare('SELECT id, name, color, sort_order, created_at FROM note_categories ORDER BY sort_order, id').all(),
+      notes: db.prepare(`
+        SELECT id, title, content, category_id, tags, pinned, archived, created_at, updated_at
+        FROM notes ORDER BY id
+      `).all(),
+    },
+    counts: {
+      projects: db.prepare('SELECT COUNT(*) AS c FROM projects').get().c,
+      priorities: db.prepare('SELECT COUNT(*) AS c FROM priorities').get().c,
+      tasks: db.prepare('SELECT COUNT(*) AS c FROM tasks').get().c,
+      note_categories: db.prepare('SELECT COUNT(*) AS c FROM note_categories').get().c,
+      notes: db.prepare('SELECT COUNT(*) AS c FROM notes').get().c,
+    },
+  };
+}
+
+function importAllData(payload, mode = 'replace') {
+  const data = payload?.data || payload;
+  if (!data || typeof data !== 'object') {
+    throw new Error('导入文件格式不正确');
+  }
+
+  const projects = Array.isArray(data.projects) ? data.projects : [];
+  const priorities = Array.isArray(data.priorities) ? data.priorities : [];
+  const tasks = Array.isArray(data.tasks) ? data.tasks : [];
+  const noteCategories = Array.isArray(data.note_categories) ? data.note_categories : [];
+  const notes = Array.isArray(data.notes) ? data.notes : [];
+  const isMerge = mode === 'merge';
+
+  const before = {
+    projects: db.prepare('SELECT COUNT(*) AS c FROM projects').get().c,
+    priorities: db.prepare('SELECT COUNT(*) AS c FROM priorities').get().c,
+    tasks: db.prepare('SELECT COUNT(*) AS c FROM tasks').get().c,
+    note_categories: db.prepare('SELECT COUNT(*) AS c FROM note_categories').get().c,
+    notes: db.prepare('SELECT COUNT(*) AS c FROM notes').get().c,
+  };
+
+  db.exec('BEGIN');
+  try {
+    if (!isMerge) {
+      db.exec('DELETE FROM notes');
+      db.exec('DELETE FROM note_categories');
+      db.exec('DELETE FROM tasks');
+      db.exec('DELETE FROM priorities');
+      db.exec('DELETE FROM projects');
+    }
+
+    const insertProject = db.prepare(
+      'INSERT INTO projects (id, name, color, created_at) VALUES (?, ?, ?, ?)',
+    );
+    projects.forEach((p) => {
+      const name = String(p.name || '未命名').trim() || '未命名';
+      if (isMerge) {
+        if (p.id != null && db.prepare('SELECT id FROM projects WHERE id = ?').get(p.id)) return;
+        if (db.prepare('SELECT id FROM projects WHERE name = ?').get(name)) return;
+      }
+      const created = p.created_at || new Date().toISOString().replace('T', ' ').slice(0, 19);
+      if (p.id != null) {
+        insertProject.run(p.id, name, p.color || '#6C8EFF', created);
+      } else {
+        db.prepare('INSERT INTO projects (name, color, created_at) VALUES (?, ?, ?)')
+          .run(name, p.color || '#6C8EFF', created);
+      }
+    });
+
+    const insertPriority = db.prepare(
+      'INSERT INTO priorities (id, code, name, color, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    );
+    priorities.forEach((p, i) => {
+      const code = String(p.code || `p_${p.id || i}`).toLowerCase();
+      if (isMerge) {
+        if (p.id != null && db.prepare('SELECT id FROM priorities WHERE id = ?').get(p.id)) return;
+        if (db.prepare('SELECT id FROM priorities WHERE code = ?').get(code)) return;
+      }
+      const name = String(p.name || '紧急').trim() || '紧急';
+      const created = p.created_at || new Date().toISOString().replace('T', ' ').slice(0, 19);
+      if (p.id != null) {
+        insertPriority.run(p.id, code, name, p.color || '#FF453A', p.sort_order != null ? p.sort_order : i, created);
+      } else {
+        db.prepare('INSERT INTO priorities (code, name, color, sort_order, created_at) VALUES (?, ?, ?, ?, ?)')
+          .run(code, name, p.color || '#FF453A', p.sort_order != null ? p.sort_order : i, created);
+      }
+    });
+    if (!isMerge && priorities.length === 0) {
+      db.prepare('INSERT INTO priorities (code, name, color, sort_order) VALUES (?, ?, ?, ?)')
+        .run('medium', '中', '#0A84FF', 0);
+    }
+
+    const priorityCodes = new Set(db.prepare('SELECT code FROM priorities').all().map((r) => r.code));
+    const fallbackPriority = db.prepare('SELECT code FROM priorities ORDER BY sort_order, id LIMIT 1').get()?.code || 'medium';
+
+    const insertTask = db.prepare(`
+      INSERT INTO tasks (id, title, description, status, priority, due_date, project_id, completed_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    tasks.forEach((t) => {
+      if (isMerge && t.id != null && db.prepare('SELECT id FROM tasks WHERE id = ?').get(t.id)) return;
+      let projectId = t.project_id ?? null;
+      if (projectId != null && !db.prepare('SELECT id FROM projects WHERE id = ?').get(projectId)) {
+        projectId = null;
+      }
+      let priority = t.priority || fallbackPriority;
+      if (!priorityCodes.has(priority)) priority = fallbackPriority;
+      const title = String(t.title || '').trim() || '未命名任务';
+      const created = t.created_at || new Date().toISOString().replace('T', ' ').slice(0, 19);
+      const updated = t.updated_at || created;
+      if (t.id != null) {
+        insertTask.run(t.id, title, t.description || '', t.status || 'todo', priority, t.due_date || null, projectId, t.completed_at || null, created, updated);
+      } else {
+        db.prepare('INSERT INTO tasks (title, description, status, priority, due_date, project_id, completed_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .run(title, t.description || '', t.status || 'todo', priority, t.due_date || null, projectId, t.completed_at || null, created, updated);
+      }
+    });
+
+    const insertCat = db.prepare(
+      'INSERT INTO note_categories (id, name, color, sort_order, created_at) VALUES (?, ?, ?, ?, ?)',
+    );
+    noteCategories.forEach((c, i) => {
+      const name = String(c.name || '未命名').trim() || '未命名';
+      if (isMerge) {
+        if (c.id != null && db.prepare('SELECT id FROM note_categories WHERE id = ?').get(c.id)) return;
+        if (db.prepare('SELECT id FROM note_categories WHERE name = ?').get(name)) return;
+      }
+      const created = c.created_at || new Date().toISOString().replace('T', ' ').slice(0, 19);
+      if (c.id != null) {
+        insertCat.run(c.id, name, c.color || '#0A84FF', c.sort_order != null ? c.sort_order : i, created);
+      } else {
+        db.prepare('INSERT INTO note_categories (name, color, sort_order, created_at) VALUES (?, ?, ?, ?)')
+          .run(name, c.color || '#0A84FF', c.sort_order != null ? c.sort_order : i, created);
+      }
+    });
+    if (!isMerge && noteCategories.length === 0) {
+      db.prepare('INSERT INTO note_categories (name, color, sort_order) VALUES (?, ?, ?)')
+        .run('生活', '#30D158', 0);
+    }
+
+    const insertNote = db.prepare(`
+      INSERT INTO notes (id, title, content, category_id, tags, pinned, archived, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    notes.forEach((n) => {
+      if (isMerge && n.id != null && db.prepare('SELECT id FROM notes WHERE id = ?').get(n.id)) return;
+      let categoryId = n.category_id ?? null;
+      if (categoryId != null && !db.prepare('SELECT id FROM note_categories WHERE id = ?').get(categoryId)) {
+        categoryId = null;
+      }
+      const title = String(n.title || '').trim() || '未命名琐事';
+      const created = n.created_at || new Date().toISOString().replace('T', ' ').slice(0, 19);
+      const updated = n.updated_at || created;
+      if (n.id != null) {
+        insertNote.run(n.id, title, n.content || '', categoryId, n.tags || '', n.pinned ? 1 : 0, n.archived ? 1 : 0, created, updated);
+      } else {
+        db.prepare('INSERT INTO notes (title, content, category_id, tags, pinned, archived, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+          .run(title, n.content || '', categoryId, n.tags || '', n.pinned ? 1 : 0, n.archived ? 1 : 0, created, updated);
+      }
+    });
+
+    for (const table of ['projects', 'priorities', 'tasks', 'note_categories', 'notes']) {
+      const max = db.prepare(`SELECT COALESCE(MAX(id), 0) AS m FROM ${table}`).get().m;
+      db.prepare('DELETE FROM sqlite_sequence WHERE name = ?').run(table);
+      if (max > 0) {
+        db.prepare('INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)').run(table, max);
+      }
+    }
+
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+
+  const after = {
+    projects: db.prepare('SELECT COUNT(*) AS c FROM projects').get().c,
+    priorities: db.prepare('SELECT COUNT(*) AS c FROM priorities').get().c,
+    tasks: db.prepare('SELECT COUNT(*) AS c FROM tasks').get().c,
+    note_categories: db.prepare('SELECT COUNT(*) AS c FROM note_categories').get().c,
+    notes: db.prepare('SELECT COUNT(*) AS c FROM notes').get().c,
+  };
+
+  if (isMerge) {
+    return {
+      mode: 'merge',
+      added: {
+        projects: after.projects - before.projects,
+        priorities: after.priorities - before.priorities,
+        tasks: after.tasks - before.tasks,
+        note_categories: after.note_categories - before.note_categories,
+        notes: after.notes - before.notes,
+      },
+      totals: after,
+    };
+  }
+
+  return { mode: 'replace', totals: after, counts: after };
+}
+
 module.exports = {
   initDb,
   initDbFile,
@@ -685,5 +895,7 @@ module.exports = {
   deleteNote,
   getNoteStats,
   getStats,
+  exportAllData,
+  importAllData,
   closeDb,
 };

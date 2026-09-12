@@ -68,8 +68,9 @@ export default function CalendarView({
           <h1>日历</h1>
           <p className="muted">选中日期，右侧查看与安排当天任务</p>
         </div>
-        <button type="button" className="btn primary" onClick={() => onCreate({ due_date: selected })}>
-          + 新建任务
+        <button type="button" className="btn create" onClick={() => onCreate({ due_date: selected })}>
+          <span className="btn-plus" aria-hidden="true">+</span>
+          新建任务
         </button>
       </header>
 

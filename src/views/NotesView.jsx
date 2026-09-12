@@ -152,8 +152,9 @@ export default function NotesView({
               : '备忘、灵感、资料，长期记住的都在这里'}
           </p>
         </div>
-        <button type="button" className="btn primary" onClick={() => onCreate()}>
-          + 记一条
+        <button type="button" className="btn create" onClick={() => onCreate()}>
+          <span className="btn-plus" aria-hidden="true">+</span>
+          记一条
         </button>
       </header>
 

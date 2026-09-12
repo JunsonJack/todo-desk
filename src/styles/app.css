@@ -6,6 +6,10 @@
   --bg-hover: rgba(118, 118, 128, 0.24);
   --border: rgba(84, 84, 122, 0.36);
   --border-soft: rgba(255, 255, 255, 0.08);
+  --check-border: rgba(255, 255, 255, 0.34);
+  --check-border-hover: var(--primary);
+  --check-bg-hover: rgba(10, 132, 255, 0.12);
+  --check-shadow-hover: rgba(10, 132, 255, 0.16);
   --text: #f5f5f7;
   --text-muted: #98989d;
   --primary: #0a84ff;
@@ -39,6 +43,10 @@
   --bg-hover: rgba(120, 120, 128, 0.12);
   --border: rgba(60, 60, 67, 0.18);
   --border-soft: rgba(60, 60, 67, 0.12);
+  --check-border: rgba(60, 60, 67, 0.38);
+  --check-border-hover: #007aff;
+  --check-bg-hover: rgba(0, 122, 255, 0.08);
+  --check-shadow-hover: rgba(0, 122, 255, 0.14);
   --text: #1c1c1e;
   --text-muted: #6e6e73;
   --primary: #007aff;
@@ -119,19 +127,83 @@ body,
   margin: 0;
   min-height: 100%;
   height: 100%;
-  background:
-    radial-gradient(1000px 480px at 8% -12%, rgba(10, 132, 255, 0.10), transparent 55%),
-    radial-gradient(800px 360px at 92% 0%, rgba(48, 209, 88, 0.05), transparent 48%),
-    var(--bg);
+  background: var(--bg);
 }
 
-html[data-theme="light"],
-html[data-theme="light"] body,
-html[data-theme="light"] #root {
+/* Wallpaper layer on app shell */
+.app-shell {
+  position: relative;
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  height: 100vh;
+  overflow: hidden;
+  isolation: isolate;
+  transition: grid-template-columns 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.app-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background: var(--bg);
+}
+
+.app-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.app-shell[data-wallpaper="dusk"]::after {
+  opacity: 1;
   background:
-    radial-gradient(1000px 480px at 8% -12%, rgba(0, 122, 255, 0.08), transparent 55%),
-    radial-gradient(800px 360px at 92% 0%, rgba(29, 159, 63, 0.05), transparent 48%),
-    var(--bg);
+    radial-gradient(900px 480px at 10% 0%, rgba(191, 90, 242, 0.35), transparent 55%),
+    radial-gradient(800px 500px at 90% 20%, rgba(10, 132, 255, 0.32), transparent 50%),
+    linear-gradient(160deg, rgba(28, 18, 48, 0.92), rgba(12, 24, 48, 0.88));
+}
+
+.app-shell[data-wallpaper="ocean"]::after {
+  opacity: 1;
+  background:
+    radial-gradient(700px 420px at 80% 0%, rgba(64, 210, 255, 0.28), transparent 50%),
+    radial-gradient(900px 500px at 0% 80%, rgba(10, 80, 160, 0.35), transparent 55%),
+    linear-gradient(180deg, rgba(8, 24, 40, 0.9), rgba(6, 16, 28, 0.9));
+}
+
+.app-shell[data-wallpaper="forest"]::after {
+  opacity: 1;
+  background:
+    radial-gradient(800px 400px at 20% 0%, rgba(48, 209, 88, 0.22), transparent 50%),
+    radial-gradient(700px 420px at 100% 70%, rgba(20, 120, 90, 0.25), transparent 50%),
+    linear-gradient(165deg, rgba(10, 32, 28, 0.9), rgba(8, 20, 24, 0.9));
+}
+
+.app-shell[data-wallpaper="aurora"]::after {
+  opacity: 1;
+  background:
+    radial-gradient(600px 300px at 30% 0%, rgba(64, 210, 255, 0.3), transparent 50%),
+    radial-gradient(700px 360px at 70% 10%, rgba(191, 90, 242, 0.28), transparent 50%),
+    radial-gradient(800px 400px at 50% 100%, rgba(10, 132, 255, 0.2), transparent 55%),
+    linear-gradient(180deg, rgba(12, 16, 36, 0.9), rgba(10, 12, 28, 0.92));
+}
+
+.app-shell[data-wallpaper="custom"]::after {
+  opacity: var(--wallpaper-opacity, 0.55);
+  background-image: var(--wallpaper-image, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.app-shell > * {
+  position: relative;
+  z-index: 0;
 }
 
 button,
@@ -158,13 +230,6 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
-.app-shell {
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  height: 100vh;
-  overflow: hidden;
-}
-
 /* Sidebar */
 .sidebar {
   display: flex;
@@ -175,6 +240,225 @@ a:focus-visible {
   background: var(--sidebar-bg);
   backdrop-filter: blur(28px) saturate(160%);
   -webkit-backdrop-filter: blur(28px) saturate(160%);
+  width: 240px;
+  transition: width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), padding 0.22s ease;
+  overflow: hidden;
+}
+
+.app-shell.sidebar-collapsed {
+  grid-template-columns: 72px 1fr;
+}
+
+.sidebar-collapsed .sidebar {
+  width: 72px;
+  padding: 22px 10px;
+  align-items: center;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.brand-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  transition: opacity 0.15s ease, width 0.2s ease;
+}
+
+.sidebar-collapsed .brand {
+  justify-content: center;
+  gap: 0;
+  padding: 4px 0;
+}
+
+.sidebar-collapsed .brand-text {
+  display: none;
+}
+
+.sidebar-toggle {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  background: rgba(120, 120, 128, 0.12);
+  border: 1px solid transparent;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.15s ease;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(120, 120, 128, 0.2);
+  color: var(--text);
+}
+
+.sidebar-collapsed .sidebar-toggle {
+  position: absolute;
+  top: 18px;
+  right: 8px;
+}
+
+.sidebar-collapsed .brand {
+  position: relative;
+}
+
+.sidebar-toggle-icon {
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(180deg, #39a0ff 0%, #0a84ff 100%);
+  box-shadow: 0 6px 16px rgba(10, 132, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  flex: 0 0 auto;
+}
+
+.sidebar-collapsed .brand-mark {
+  width: 36px;
+  height: 36px;
+}
+
+.brand-name {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.brand-sub {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  width: 100%;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  color: var(--text-muted);
+  transition: background 0.15s ease, color 0.15s ease, padding 0.2s ease;
+  text-align: left;
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.nav-item.active {
+  background: var(--primary);
+  color: white;
+  box-shadow: 0 4px 14px rgba(10, 132, 255, 0.28);
+}
+
+.nav-icon {
+  width: 18px;
+  min-width: 18px;
+  text-align: center;
+  opacity: 0.95;
+  font-size: 15px;
+}
+
+.nav-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.15s ease;
+}
+
+.sidebar-collapsed .nav-item {
+  justify-content: center;
+  padding: 11px 0;
+  width: 44px;
+  margin: 0 auto;
+}
+
+.sidebar-collapsed .nav-label {
+  display: none;
+}
+
+.sidebar-collapsed .nav-badge {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  margin: 0;
+  min-width: 16px;
+  height: 16px;
+  font-size: 10px;
+  padding: 0 4px;
+}
+
+.sidebar-collapsed .nav-item {
+  position: relative;
+}
+
+.nav-badge {
+  margin-left: auto;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+}
+
+.nav-item.active .nav-badge {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.sidebar-collapsed .mini-stats {
+  display: none;
+}
+
+.sidebar-collapsed .sidebar-cta {
+  width: 44px;
+  min-height: 40px;
+  padding: 0;
+  margin: 0 auto;
+  font-size: 0;
+}
+
+.sidebar-collapsed .sidebar-cta::first-letter {
+  font-size: 16px;
 }
 
 .brand {
@@ -361,6 +645,82 @@ a:focus-visible {
   background: #0974e0;
 }
 
+/* Softer create action — less shouty than solid primary */
+.btn.create {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 999px;
+  padding: 8px 14px 8px 12px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  border: 1px solid transparent;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  box-shadow: none;
+}
+
+.btn.create:hover {
+  background: color-mix(in srgb, var(--primary) 22%, transparent);
+  color: var(--primary-hover);
+}
+
+.btn.create:active {
+  transform: scale(0.98);
+}
+
+.btn.create .btn-plus {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+/* Sidebar filled create — calmer than full primary */
+.sidebar-cta.btn.create {
+  width: 100%;
+  padding: 9px 12px;
+  justify-content: center;
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(10, 132, 255, 0.22);
+}
+
+.sidebar-cta.btn.create:hover {
+  background: var(--primary-hover);
+  color: #fff;
+}
+
+.sidebar-cta.btn.create .btn-plus {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.sidebar-collapsed .sidebar-cta.btn.create {
+  width: 44px;
+  min-height: 40px;
+  padding: 0;
+  margin: 0 auto;
+}
+
+.sidebar-collapsed .sidebar-cta.btn.create .btn-label {
+  display: none;
+}
+
+.sidebar-collapsed .sidebar-cta.btn.create .btn-plus {
+  width: 22px;
+  height: 22px;
+  font-size: 16px;
+}
+
 .btn.ghost {
   border-color: transparent;
   background: var(--field-bg);
@@ -477,6 +837,49 @@ a:focus-visible {
     opacity: 1;
     transform: scale(1) translateY(0);
   }
+}
+
+.import-mode-card {
+  width: min(440px, 100%);
+}
+
+.import-mode-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.import-mode-option {
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: var(--field-bg);
+  color: var(--text);
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.import-mode-option:hover {
+  background: var(--field-bg-hover);
+  border-color: rgba(10, 132, 255, 0.35);
+}
+
+.import-mode-option.danger:hover {
+  border-color: rgba(255, 69, 58, 0.45);
+}
+
+.import-mode-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.import-mode-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
 }
 
 .btn.block {
@@ -820,30 +1223,31 @@ select {
 }
 
 .check-btn {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   margin-top: 2px;
   border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  border: 1.6px solid var(--check-border);
   display: grid;
   place-items: center;
   color: white;
-  font-size: 11px;
+  font-size: 12px;
   background: transparent;
   flex-shrink: 0;
   transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .check-btn:hover {
-  border-color: var(--primary);
-  background: rgba(10, 132, 255, 0.12);
-  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.14);
+  border-color: var(--check-border-hover);
+  background: var(--check-bg-hover);
+  box-shadow: 0 0 0 3px var(--check-shadow-hover);
 }
 
 .task-card.is-done .check-btn {
   background: var(--success);
   border-color: var(--success);
   box-shadow: none;
+  color: #fff;
 }
 
 .task-main {
@@ -1164,28 +1568,31 @@ select {
 
 .week-task-check {
   grid-area: check;
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
   margin-top: 1px;
   border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  border: 1.6px solid var(--check-border);
   display: grid;
   place-items: center;
-  font-size: 10px;
+  font-size: 11px;
   color: #fff;
   background: transparent;
   flex-shrink: 0;
   padding: 0;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .week-task-check:hover {
-  border-color: var(--primary);
-  background: rgba(10, 132, 255, 0.15);
+  border-color: var(--check-border-hover);
+  background: var(--check-bg-hover);
+  box-shadow: 0 0 0 3px var(--check-shadow-hover);
 }
 
 .week-task.is-done .week-task-check {
   background: var(--success);
   border-color: var(--success);
+  color: #fff;
 }
 
 .week-task-title {
@@ -2764,6 +3171,93 @@ select {
 .theme-card.active .theme-desc {
   color: var(--text);
   opacity: 0.85;
+}
+
+.wallpaper-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px 12px 12px;
+}
+
+.wallpaper-card {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: var(--field-bg);
+  color: var(--text);
+  transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.wallpaper-card:hover {
+  background: var(--field-bg-hover);
+  border-color: rgba(10, 132, 255, 0.28);
+}
+
+.wallpaper-card.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.12);
+}
+
+.wallpaper-preview {
+  display: block;
+  width: 100%;
+  height: 56px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.wp-default .wallpaper-preview {
+  background: radial-gradient(120% 80% at 10% 0%, rgba(10, 132, 255, 0.35), transparent 55%),
+    radial-gradient(100% 80% at 90% 20%, rgba(48, 209, 88, 0.18), transparent 50%),
+    #1c1c1e;
+}
+
+.wp-dusk .wallpaper-preview {
+  background: linear-gradient(135deg, #5b2d8e, #1a3a6b 55%, #0f172a);
+}
+
+.wp-ocean .wallpaper-preview {
+  background: linear-gradient(135deg, #0b3a55, #0c2340 50%, #071018);
+}
+
+.wp-forest .wallpaper-preview {
+  background: linear-gradient(135deg, #0f3d32, #0c2a28 55%, #0a1618);
+}
+
+.wp-aurora .wallpaper-preview {
+  background:
+    radial-gradient(50% 80% at 20% 10%, #2a6f97, transparent 60%),
+    radial-gradient(50% 80% at 80% 20%, #7b2cbf, transparent 55%),
+    #0b1020;
+}
+
+.wp-custom .wallpaper-preview {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
+    #2c2c2e;
+  background-size: cover;
+  background-position: center;
+}
+
+.wallpaper-title {
+  font-weight: 600;
+}
+
+.wallpaper-range {
+  width: 160px;
+  accent-color: var(--primary);
+}
+
+@media (max-width: 900px) {
+  .wallpaper-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* MCP guide */

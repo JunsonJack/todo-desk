@@ -108,10 +108,11 @@ export default function WeekView({
         </div>
         <button
           type="button"
-          className="btn primary"
+          className="btn create"
           onClick={() => onCreate({ due_date: today })}
         >
-          + 新建任务
+          <span className="btn-plus" aria-hidden="true">+</span>
+          新建任务
         </button>
       </header>
 

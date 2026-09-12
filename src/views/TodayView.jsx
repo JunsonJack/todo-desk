@@ -39,8 +39,9 @@ export default function TodayView({
           <h1>今日</h1>
           <p className="muted">{formatDateCN(today)} · 完成 {doneToday}/{todayTasks.length} · 进度 {progress}%</p>
         </div>
-        <button type="button" className="btn primary" onClick={() => onCreate({ due_date: today })}>
-          + 添加今日任务
+        <button type="button" className="btn create" onClick={() => onCreate({ due_date: today })}>
+          <span className="btn-plus" aria-hidden="true">+</span>
+          添加今日任务
         </button>
       </header>
 

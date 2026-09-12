@@ -3,6 +3,7 @@ import { API, NAV_ITEMS } from './utils/api.js';
 import { todayStr, buildPriorityMap } from './utils/dates.js';
 import {
   applyTheme,
+  applyWallpaper,
   loadSettings,
   resolveTheme,
   saveSettings,
@@ -59,17 +60,24 @@ export default function App() {
   useEffect(() => {
     const resolved = applyTheme(settings.theme);
     setResolvedTheme(resolved);
+    applyWallpaper(settings);
 
     if (settings.theme !== 'system') return undefined;
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const onChange = () => setResolvedTheme(applyTheme('system'));
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
-  }, [settings.theme]);
+  }, [settings.theme, settings.wallpaper, settings.wallpaperImage, settings.wallpaperOpacity]);
 
   const handleSettingsChange = useCallback((next) => {
-    const saved = saveSettings(next);
-    setSettings(saved);
+    try {
+      const saved = saveSettings(next);
+      setSettings(saved);
+      setError('');
+    } catch (err) {
+      setError(err?.message || '设置保存失败');
+      setSettings(loadSettings());
+    }
   }, []);
 
   const refresh = useCallback(async () => {
@@ -200,6 +208,27 @@ export default function App() {
     }
   }, [refresh]);
 
+  const handleExportData = useCallback(async () => {
+    const payload = await API.data.exportAll();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    a.href = url;
+    a.download = `todo-desk-backup-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return payload.counts;
+  }, []);
+
+  const handleImportData = useCallback(async (payload, mode = 'replace') => {
+    const result = await API.data.importAll(payload, mode);
+    await refresh();
+    return result;
+  }, [refresh]);
+
   const openCreateNote = useCallback((defaults = {}) => {
     setNoteModal({
       open: true,
@@ -286,14 +315,28 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell">
+    <div
+      className={`app-shell ${settings.sidebarCollapsed ? 'sidebar-collapsed' : ''}`}
+      data-wallpaper={settings.wallpaper || 'default'}
+    >
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">T</div>
-          <div>
+          <div className="brand-text">
             <div className="brand-name">Todo Desk</div>
             <div className="brand-sub">本地待办工作台</div>
           </div>
+          <button
+            type="button"
+            className="sidebar-toggle"
+            title={settings.sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+            aria-label={settings.sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+            onClick={() => handleSettingsChange({ ...settings, sidebarCollapsed: !settings.sidebarCollapsed })}
+          >
+            <span className="sidebar-toggle-icon" aria-hidden="true">
+              {settings.sidebarCollapsed ? '»' : '«'}
+            </span>
+          </button>
         </div>
 
         <nav className="nav">
@@ -303,10 +346,13 @@ export default function App() {
               type="button"
               className={`nav-item ${tab === item.id ? 'active' : ''}`}
               onClick={() => setTab(item.id)}
+              title={settings.sidebarCollapsed ? item.label : undefined}
             >
               <span className="nav-icon">{item.icon}</span>
-              <span>{item.label}</span>
-              {item.id === 'list' ? <span className="nav-badge">{openCount}</span> : null}
+              <span className="nav-label">{item.label}</span>
+              {item.id === 'list' ? (
+                <span className="nav-badge">{openCount}</span>
+              ) : null}
             </button>
           ))}
         </nav>
@@ -328,8 +374,14 @@ export default function App() {
               </div>
             </div>
           ) : null}
-          <button type="button" className="btn primary block" onClick={() => openCreateTask()}>
-            + 新建任务
+          <button
+            type="button"
+            className="btn create sidebar-cta"
+            onClick={() => openCreateTask()}
+            title={settings.sidebarCollapsed ? '新建任务' : undefined}
+          >
+            <span className="btn-plus" aria-hidden="true">+</span>
+            <span className="btn-label">新建任务</span>
           </button>
         </div>
       </aside>
@@ -369,7 +421,8 @@ export default function App() {
                 onPriorityDelete={handleDeletePriority}
                 onPriorityMove={handleMovePriority}
                 onPriorityReorder={handleReorderPriority}
-                onForceRefresh={handleForceRefresh}
+                onExportData={handleExportData}
+                onImportData={handleImportData}
               />
             ) : null}
           </>
