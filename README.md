@@ -44,3 +44,6 @@ SQLite 数据库保存在 Electron 用户数据目录：
 - Electron 36
 - React 19 + Vite 6
 - Node 内置 `node:sqlite`（无需额外原生编译）
+- ![image-20260912124551363](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20260912124551363.png)
+
+![image-20260912124522717](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20260912124522717.png)

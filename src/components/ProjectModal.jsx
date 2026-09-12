@@ -31,7 +31,13 @@ export default function ProjectModal({ open, project, onClose, onSubmit, onDelet
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose} role="presentation">
+    <div
+      className="modal-backdrop"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="presentation"
+    >
       <div
         className="modal-card small"
         onClick={(e) => e.stopPropagation()}

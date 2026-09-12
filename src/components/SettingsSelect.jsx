@@ -63,26 +63,30 @@ export default function SettingsSelect({
     setMenuState('open');
   };
 
-  const closeMenu = () => {
+  const closeMenu = (opts = {}) => {
     setMenuState('closing');
     selectingRef.current = false;
     clearCloseTimer();
     closeTimerRef.current = setTimeout(() => {
       setMenuState('closed');
       closeTimerRef.current = null;
-    }, CLOSE_MS);
+    }, opts.immediate ? 0 : CLOSE_MS);
   };
 
   const commit = (id) => {
     if (selectingRef.current) return;
     selectingRef.current = true;
-    closeMenu();
+    // Keep menu interactive until click finishes; only collapse animation state.
+    setMenuState('closing');
+    clearCloseTimer();
     try {
       onChange?.(id);
     } finally {
-      setTimeout(() => {
+      closeTimerRef.current = setTimeout(() => {
+        setMenuState('closed');
+        closeTimerRef.current = null;
         selectingRef.current = false;
-      }, 0);
+      }, CLOSE_MS);
     }
     setHighlight(options.findIndex((o) => o.id === id));
   };
@@ -164,9 +168,9 @@ export default function SettingsSelect({
                 className={`settings-select-option ${idx === highlight ? 'active' : ''} ${opt.id === value ? 'selected' : ''}`}
                 onMouseEnter={() => setHighlight(idx)}
                 onMouseDown={(e) => {
+                  // Prevent focus steal only; commit on click so the same target receives click.
                   e.preventDefault();
                   e.stopPropagation();
-                  commit(opt.id);
                 }}
                 onClick={(e) => {
                   e.preventDefault();

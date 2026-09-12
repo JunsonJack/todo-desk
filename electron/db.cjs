@@ -49,9 +49,35 @@ function ensureSchema() {
     CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date);
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
     CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
+
+    CREATE TABLE IF NOT EXISTS note_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      color TEXT NOT NULL DEFAULT '#0A84FF',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      content TEXT DEFAULT '',
+      category_id INTEGER,
+      tags TEXT DEFAULT '',
+      pinned INTEGER NOT NULL DEFAULT 0,
+      archived INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+      FOREIGN KEY (category_id) REFERENCES note_categories(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notes_category ON notes(category_id);
+    CREATE INDEX IF NOT EXISTS idx_notes_pinned ON notes(pinned);
+    CREATE INDEX IF NOT EXISTS idx_notes_archived ON notes(archived);
   `);
 
   migrateTasksPriorityCheck();
+  seedNoteCategories();
 
   const projectCount = db.prepare('SELECT COUNT(*) AS c FROM projects').get().c;
   if (projectCount === 0) {
@@ -450,6 +476,178 @@ function normalizePriorityOrder() {
   });
 }
 
+function seedNoteCategories() {
+  const count = db.prepare('SELECT COUNT(*) AS c FROM note_categories').get().c;
+  if (count > 0) return;
+  const defaults = [
+    ['生活', '#30D158'],
+    ['工作备忘', '#0A84FF'],
+    ['密码提示', '#FF9F0A'],
+    ['灵感', '#BF5AF2'],
+    ['购物', '#FF453A'],
+  ];
+  const insert = db.prepare(
+    'INSERT INTO note_categories (name, color, sort_order) VALUES (?, ?, ?)',
+  );
+  defaults.forEach((row, i) => insert.run(row[0], row[1], i));
+}
+
+function mapNote(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    content: row.content || '',
+    category_id: row.category_id ?? null,
+    tags: row.tags || '',
+    pinned: !!row.pinned,
+    archived: !!row.archived,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    category_name: row.category_name || null,
+    category_color: row.category_color || null,
+  };
+}
+
+const NOTE_SELECT = `
+  SELECT n.*, c.name AS category_name, c.color AS category_color
+  FROM notes n
+  LEFT JOIN note_categories c ON c.id = n.category_id
+`;
+
+function listNoteCategories() {
+  return db.prepare(`
+    SELECT c.*,
+      (SELECT COUNT(*) FROM notes n WHERE n.category_id = c.id AND n.archived = 0) AS note_count,
+      (SELECT COUNT(*) FROM notes n WHERE n.category_id = c.id AND n.pinned = 1 AND n.archived = 0) AS pinned_count
+    FROM note_categories c
+    ORDER BY c.sort_order ASC, c.id ASC
+  `).all();
+}
+
+function createNoteCategory({ name, color }) {
+  const trimmed = String(name || '').trim();
+  if (!trimmed) throw new Error('分类名称不能为空');
+  const exists = db.prepare('SELECT id FROM note_categories WHERE name = ?').get(trimmed);
+  if (exists) throw new Error(`分类已存在：${trimmed}`);
+  const maxSort = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS s FROM note_categories').get().s;
+  const result = db.prepare(
+    'INSERT INTO note_categories (name, color, sort_order) VALUES (?, ?, ?)',
+  ).run(trimmed, color || '#0A84FF', maxSort + 1);
+  return db.prepare('SELECT * FROM note_categories WHERE id = ?').get(result.lastInsertRowid);
+}
+
+function updateNoteCategory(id, patch = {}) {
+  const existing = db.prepare('SELECT * FROM note_categories WHERE id = ?').get(id);
+  if (!existing) throw new Error('分类不存在');
+  const name = patch.name != null ? String(patch.name).trim() : existing.name;
+  if (!name) throw new Error('分类名称不能为空');
+  const color = patch.color || existing.color;
+  db.prepare('UPDATE note_categories SET name = ?, color = ? WHERE id = ?')
+    .run(name, color, id);
+  return db.prepare('SELECT * FROM note_categories WHERE id = ?').get(id);
+}
+
+function deleteNoteCategory(id) {
+  const existing = db.prepare('SELECT * FROM note_categories WHERE id = ?').get(id);
+  if (!existing) return { deleted: false, id };
+  db.prepare('UPDATE notes SET category_id = NULL WHERE category_id = ?').run(id);
+  db.prepare('DELETE FROM note_categories WHERE id = ?').run(id);
+  listNoteCategories().forEach((c, i) => {
+    db.prepare('UPDATE note_categories SET sort_order = ? WHERE id = ?').run(i, c.id);
+  });
+  return { deleted: true, id };
+}
+
+function listNotes(filters = {}) {
+  const where = [];
+  const params = [];
+
+  if (filters.archived === true || filters.archived === 1) {
+    where.push('n.archived = 1');
+  } else if (filters.archived === false || filters.archived === 0 || filters.archived == null) {
+    where.push('n.archived = 0');
+  }
+
+  if (filters.category === 'none') {
+    where.push('n.category_id IS NULL');
+  } else if (filters.category === 'pinned') {
+    where.push('n.pinned = 1');
+  } else if (filters.category != null && filters.category !== 'all') {
+    where.push('n.category_id = ?');
+    params.push(Number(filters.category));
+  }
+
+  if (filters.q) {
+    where.push('(n.title LIKE ? OR n.content LIKE ? OR n.tags LIKE ?)');
+    const q = `%${filters.q}%`;
+    params.push(q, q, q);
+  }
+
+  const sql = `${NOTE_SELECT}
+    ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ORDER BY n.pinned DESC, n.updated_at DESC, n.id DESC
+  `;
+  return db.prepare(sql).all(...params).map(mapNote);
+}
+
+function getNote(id) {
+  const row = db.prepare(`${NOTE_SELECT} WHERE n.id = ?`).get(id);
+  return row ? mapNote(row) : null;
+}
+
+function createNote(input) {
+  const title = String(input.title || '').trim();
+  if (!title) throw new Error('标题不能为空');
+  const result = db.prepare(`
+    INSERT INTO notes (title, content, category_id, tags, pinned, archived)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    title,
+    input.content || '',
+    input.category_id != null ? Number(input.category_id) : null,
+    input.tags || '',
+    input.pinned ? 1 : 0,
+    input.archived ? 1 : 0,
+  );
+  return getNote(result.lastInsertRowid);
+}
+
+function updateNote(id, patch = {}) {
+  const existing = getNote(id);
+  if (!existing) throw new Error('琐事不存在');
+  const title = patch.title != null ? String(patch.title).trim() : existing.title;
+  if (!title) throw new Error('标题不能为空');
+  db.prepare(`
+    UPDATE notes SET
+      title = ?, content = ?, category_id = ?, tags = ?, pinned = ?, archived = ?,
+      updated_at = datetime('now', 'localtime')
+    WHERE id = ?
+  `).run(
+    title,
+    patch.content != null ? patch.content : existing.content,
+    patch.category_id !== undefined
+      ? (patch.category_id == null ? null : Number(patch.category_id))
+      : existing.category_id,
+    patch.tags != null ? patch.tags : existing.tags,
+    patch.pinned != null ? (patch.pinned ? 1 : 0) : (existing.pinned ? 1 : 0),
+    patch.archived != null ? (patch.archived ? 1 : 0) : (existing.archived ? 1 : 0),
+    id,
+  );
+  return getNote(id);
+}
+
+function deleteNote(id) {
+  const result = db.prepare('DELETE FROM notes WHERE id = ?').run(id);
+  return { deleted: result.changes > 0, id };
+}
+
+function getNoteStats() {
+  const total = db.prepare('SELECT COUNT(*) AS c FROM notes WHERE archived = 0').get().c;
+  const pinned = db.prepare('SELECT COUNT(*) AS c FROM notes WHERE archived = 0 AND pinned = 1').get().c;
+  const archived = db.prepare('SELECT COUNT(*) AS c FROM notes WHERE archived = 1').get().c;
+  return { total, pinned, archived };
+}
+
 function closeDb() {
   try {
     db?.close();
@@ -476,6 +674,16 @@ module.exports = {
   deletePriority,
   movePriority,
   reorderPriorities,
+  listNoteCategories,
+  createNoteCategory,
+  updateNoteCategory,
+  deleteNoteCategory,
+  listNotes,
+  getNote,
+  createNote,
+  updateNote,
+  deleteNote,
+  getNoteStats,
   getStats,
   closeDb,
 };

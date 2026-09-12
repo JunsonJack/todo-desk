@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { API, NAV_ITEMS } from './utils/api.js';
 import { todayStr, buildPriorityMap } from './utils/dates.js';
 import {
@@ -12,20 +12,28 @@ import TodayView from './views/TodayView.jsx';
 import WeekView from './views/WeekView.jsx';
 import CalendarView from './views/CalendarView.jsx';
 import ProjectView from './views/ProjectView.jsx';
+import NotesView from './views/NotesView.jsx';
 import SettingsView from './views/SettingsView.jsx';
 import TaskModal from './components/TaskModal.jsx';
 import ProjectModal from './components/ProjectModal.jsx';
+import NoteModal from './components/NoteModal.jsx';
+import CategoryModal from './components/CategoryModal.jsx';
+import ConfirmModal from './components/ConfirmModal.jsx';
 
 export default function App() {
   const [tab, setTab] = useState('today');
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
   const [priorities, setPriorities] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [noteCategories, setNoteCategories] = useState([]);
+  const [noteStats, setNoteStats] = useState(null);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [settings, setSettings] = useState(() => loadSettings());
   const [resolvedTheme, setResolvedTheme] = useState(() => resolveTheme(loadSettings().theme));
+  const [taskConfirm, setTaskConfirm] = useState({ open: false, task: null });
 
   const [taskModal, setTaskModal] = useState({
     open: false,
@@ -37,6 +45,14 @@ export default function App() {
     open: false,
     project: null,
   });
+  const [noteModal, setNoteModal] = useState({
+    open: false,
+    note: null,
+    categoryId: null,
+  });
+  const [categoryModal, setCategoryModal] = useState({ open: false });
+  const [notesArchived, setNotesArchived] = useState(false);
+  const notesArchivedRef = useRef(false);
 
   const priorityMap = useMemo(() => buildPriorityMap(priorities), [priorities]);
 
@@ -58,16 +74,22 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [taskList, projectList, priorityList, statsData] = await Promise.all([
+      const [taskList, projectList, priorityList, statsData, noteList, categoryList, nStats] = await Promise.all([
         API.tasks.list({}),
         API.projects.list(),
         API.priorities.list(),
         API.stats.get(),
+        API.notes.list({ archived: notesArchivedRef.current }),
+        API.noteCategories.list(),
+        API.notes.stats(),
       ]);
       setTasks(taskList);
       setProjects(projectList);
       setPriorities(priorityList);
       setStats(statsData);
+      setNotes(noteList);
+      setNoteCategories(categoryList);
+      setNoteStats(nStats);
       setError('');
     } catch (err) {
       setError(err?.message || '加载数据失败');
@@ -112,11 +134,17 @@ export default function App() {
     await refresh();
   }, [refresh]);
 
-  const handleDeleteTask = useCallback(async (task) => {
-    if (!window.confirm(`删除任务「${task.title}」？`)) return;
+  const handleDeleteTask = useCallback((task) => {
+    setTaskConfirm({ open: true, task });
+  }, []);
+
+  const confirmDeleteTask = useCallback(async () => {
+    const task = taskConfirm.task;
+    if (!task) return;
     await API.tasks.remove(task.id);
+    setTaskConfirm({ open: false, task: null });
     await refresh();
-  }, [refresh]);
+  }, [taskConfirm.task, refresh]);
 
   const handleProjectSubmit = useCallback(async (payload, existing) => {
     if (existing) {
@@ -171,6 +199,71 @@ export default function App() {
       setLoading(false);
     }
   }, [refresh]);
+
+  const openCreateNote = useCallback((defaults = {}) => {
+    setNoteModal({
+      open: true,
+      note: null,
+      categoryId: defaults.category_id ?? null,
+    });
+  }, []);
+
+  const openEditNote = useCallback((note) => {
+    setNoteModal({ open: true, note, categoryId: null });
+  }, []);
+
+  const closeNoteModal = useCallback(() => {
+    setNoteModal({ open: false, note: null, categoryId: null });
+  }, []);
+
+  const handleNoteSubmit = useCallback(async (payload, existing) => {
+    if (existing) {
+      await API.notes.update(existing.id, payload);
+    } else {
+      await API.notes.create(payload);
+    }
+    await refresh();
+  }, [refresh]);
+
+  const handleNotePin = useCallback(async (note) => {
+    await API.notes.update(note.id, { pinned: !note.pinned });
+    await refresh();
+  }, [refresh]);
+
+  const handleNoteArchive = useCallback(async (note, archived = true) => {
+    await API.notes.update(note.id, { archived });
+    // If viewing the same archive state after toggle, keep that view.
+    // Archive from active list -> note leaves active; unarchive from archive list -> leaves archive.
+    // refresh uses notesArchivedRef which NotesView updates via handleLoadNotes.
+    await refresh();
+  }, [refresh]);
+
+  const handleNoteDelete = useCallback(async (note) => {
+    await API.notes.remove(note.id);
+    await refresh();
+  }, [refresh]);
+
+  const handleCategorySubmit = useCallback(async (payload) => {
+    await API.noteCategories.create(payload);
+    await refresh();
+  }, [refresh]);
+
+  const handleLoadNotes = useCallback(async (filters = {}) => {
+    if (filters.archived !== undefined) {
+      setNotesArchived(!!filters.archived);
+      notesArchivedRef.current = !!filters.archived;
+    }
+    const list = await API.notes.list({
+      archived: notesArchivedRef.current,
+    });
+    setNotes(list);
+    const [categoryList, nStats] = await Promise.all([
+      API.noteCategories.list(),
+      API.notes.stats(),
+    ]);
+    setNoteCategories(categoryList);
+    setNoteStats(nStats);
+  }, []);
 
   const openCount = useMemo(
     () => tasks.filter((t) => t.status !== 'done').length,
@@ -252,6 +345,20 @@ export default function App() {
             {tab === 'week' ? <WeekView {...viewProps} /> : null}
             {tab === 'calendar' ? <CalendarView {...viewProps} /> : null}
             {tab === 'project' ? <ProjectView {...viewProps} /> : null}
+            {tab === 'notes' ? (
+              <NotesView
+                notes={notes}
+                categories={noteCategories}
+                noteStats={noteStats}
+                onCreate={openCreateNote}
+                onEdit={openEditNote}
+                onPin={handleNotePin}
+                onArchive={handleNoteArchive}
+                onDelete={handleNoteDelete}
+                onCreateCategory={() => setCategoryModal({ open: true })}
+                onRefresh={handleLoadNotes}
+              />
+            ) : null}
             {tab === 'settings' ? (
               <SettingsView
                 settings={settings}
@@ -290,6 +397,31 @@ export default function App() {
         onClose={() => setProjectModal({ open: false, project: null })}
         onSubmit={handleProjectSubmit}
         onDelete={handleDeleteProject}
+      />
+
+      <NoteModal
+        open={noteModal.open}
+        note={noteModal.note}
+        categories={noteCategories}
+        defaultCategoryId={noteModal.categoryId}
+        onClose={closeNoteModal}
+        onSubmit={handleNoteSubmit}
+      />
+
+      <CategoryModal
+        open={categoryModal.open}
+        onClose={() => setCategoryModal({ open: false })}
+        onSubmit={handleCategorySubmit}
+      />
+
+      <ConfirmModal
+        open={taskConfirm.open}
+        title="删除任务"
+        message={taskConfirm.task ? `确定删除「${taskConfirm.task.title}」？此操作无法撤销。` : ''}
+        confirmText="删除"
+        danger
+        onConfirm={confirmDeleteTask}
+        onCancel={() => setTaskConfirm({ open: false, task: null })}
       />
     </div>
   );

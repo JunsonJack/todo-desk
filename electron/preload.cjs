@@ -22,6 +22,20 @@ contextBridge.exposeInMainWorld('api', {
     move: (id, direction) => ipcRenderer.invoke('priorities:move', { id, direction }),
     reorder: (orderedIds) => ipcRenderer.invoke('priorities:reorder', orderedIds),
   },
+  notes: {
+    list: (filters) => ipcRenderer.invoke('notes:list', filters),
+    get: (id) => ipcRenderer.invoke('notes:get', id),
+    create: (input) => ipcRenderer.invoke('notes:create', input),
+    update: (id, patch) => ipcRenderer.invoke('notes:update', { id, patch }),
+    remove: (id) => ipcRenderer.invoke('notes:delete', id),
+    stats: () => ipcRenderer.invoke('notes:stats'),
+  },
+  noteCategories: {
+    list: () => ipcRenderer.invoke('note-categories:list'),
+    create: (input) => ipcRenderer.invoke('note-categories:create', input),
+    update: (id, patch) => ipcRenderer.invoke('note-categories:update', { id, patch }),
+    remove: (id) => ipcRenderer.invoke('note-categories:delete', id),
+  },
   stats: {
     get: () => ipcRenderer.invoke('stats:get'),
   },

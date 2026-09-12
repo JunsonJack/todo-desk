@@ -69,6 +69,18 @@ function registerIpc() {
   ipcMain.handle('priorities:move', (_e, { id, direction }) => db.movePriority(id, direction));
   ipcMain.handle('priorities:reorder', (_e, orderedIds) => db.reorderPriorities(orderedIds || []));
 
+  ipcMain.handle('notes:list', (_e, filters) => db.listNotes(filters || {}));
+  ipcMain.handle('notes:get', (_e, id) => db.getNote(id));
+  ipcMain.handle('notes:create', (_e, input) => db.createNote(input || {}));
+  ipcMain.handle('notes:update', (_e, { id, patch }) => db.updateNote(id, patch || {}));
+  ipcMain.handle('notes:delete', (_e, id) => db.deleteNote(id));
+  ipcMain.handle('notes:stats', () => db.getNoteStats());
+
+  ipcMain.handle('note-categories:list', () => db.listNoteCategories());
+  ipcMain.handle('note-categories:create', (_e, input) => db.createNoteCategory(input || {}));
+  ipcMain.handle('note-categories:update', (_e, { id, patch }) => db.updateNoteCategory(id, patch || {}));
+  ipcMain.handle('note-categories:delete', (_e, id) => db.deleteNoteCategory(id));
+
   ipcMain.handle('stats:get', () => db.getStats());
 }
 
