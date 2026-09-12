@@ -180,7 +180,8 @@ export default function SettingsView({
     setIoConfirm((s) => ({ ...s, open: false, onConfirm: null }));
   };
 
-  const CURRENT_VERSION = '1.1.0';
+  const CURRENT_VERSION = '1.1.1';
+  const RELEASES_URL = 'https://github.com/JunsonJack/todo-desk/releases';
 
   function parseVersion(v) {
     return String(v || '')
@@ -199,20 +200,81 @@ export default function SettingsView({
     return false;
   }
 
+  async function fetchText(url, timeoutMs = 8000) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
+      if (!res.ok) {
+        const err = new Error(`HTTP ${res.status}`);
+        err.status = res.status;
+        throw err;
+      }
+      return await res.text();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function detectLatestVersion() {
+    const attempts = [
+      {
+        name: 'jsDelivr',
+        run: async () => {
+          const text = await fetchText('https://cdn.jsdelivr.net/gh/JunsonJack/todo-desk@master/package.json');
+          const json = JSON.parse(text);
+          return { version: json.version, source: 'jsDelivr' };
+        },
+      },
+      {
+        name: 'GitHub raw',
+        run: async () => {
+          const text = await fetchText('https://raw.githubusercontent.com/JunsonJack/todo-desk/master/package.json');
+          const json = JSON.parse(text);
+          return { version: json.version, source: 'GitHub raw' };
+        },
+      },
+      {
+        name: 'Releases Atom',
+        run: async () => {
+          const xml = await fetchText('https://github.com/JunsonJack/todo-desk/releases.atom');
+          const tags = [...xml.matchAll(/<tag>([^<]+)<\/tag>/gi)].map((m) => m[1]);
+          const version = tags.find((t) => /^v?\d+\.\d+/.test(t));
+          if (!version) throw new Error('no version tag');
+          return { version: version.replace(/^v/i, ''), source: 'Releases Atom' };
+        },
+      },
+      {
+        name: 'GitHub API',
+        run: async () => {
+          const text = await fetchText('https://api.github.com/repos/JunsonJack/todo-desk/releases/latest');
+          const release = JSON.parse(text);
+          return {
+            version: String(release.tag_name || '').replace(/^v/i, ''),
+            source: 'GitHub API',
+            htmlUrl: release.html_url,
+          };
+        },
+      },
+    ];
+
+    const errors = [];
+    for (const item of attempts) {
+      try {
+        const result = await item.run();
+        if (result?.version) return result;
+      } catch (err) {
+        errors.push(`${item.name}: ${err?.message || err}`);
+      }
+    }
+    throw new Error(`无法获取版本信息（${errors.join('；')}）`);
+  }
+
   const handleCheckUpdate = async () => {
     setUpdateBusy(true);
     try {
-      const res = await fetch('https://api.github.com/repos/JunsonJack/todo-desk/releases/latest', {
-        headers: { Accept: 'application/vnd.github+json' },
-      });
-      if (!res.ok) {
-        throw new Error(`获取更新信息失败（HTTP ${res.status}）`);
-      }
-      const release = await res.json();
-      const latest = String(release.tag_name || release.name || '').replace(/^v/i, '');
-      const assets = Array.isArray(release.assets) ? release.assets : [];
-      const hasExe = assets.some((a) => /\.exe$/i.test(a.name || ''));
-
+      const result = await detectLatestVersion();
+      const latest = String(result.version || '').replace(/^v/i, '');
       if (!latest) {
         openIoConfirm({
           title: '检查更新',
@@ -227,11 +289,11 @@ export default function SettingsView({
       if (isNewerVersion(latest, CURRENT_VERSION)) {
         openIoConfirm({
           title: '发现新版本',
-          message: `发现更新 v${latest}，当前 v${CURRENT_VERSION}。${hasExe ? '请到 GitHub Release 页面下载安装包。' : 'Release 暂未附带 exe，请到仓库页面查看。'}`,
+          message: `发现更新 v${latest}，当前 v${CURRENT_VERSION}。请到 GitHub Release 页面下载安装包。（来源：${result.source}）`,
           confirmText: '打开下载页',
           danger: false,
           onConfirm: () => {
-            window.open(release.html_url || 'https://github.com/JunsonJack/todo-desk/releases', '_blank');
+            window.open(result.htmlUrl || RELEASES_URL, '_blank');
             closeIoConfirm();
           },
         });
@@ -240,7 +302,7 @@ export default function SettingsView({
 
       openIoConfirm({
         title: '已是最新版本',
-        message: `当前 v${CURRENT_VERSION}，GitHub 最新为 v${latest}。`,
+        message: `当前 v${CURRENT_VERSION}，最新为 v${latest}。（来源：${result.source}）`,
         confirmText: '好的',
         danger: false,
         onConfirm: () => closeIoConfirm(),
@@ -248,10 +310,13 @@ export default function SettingsView({
     } catch (err) {
       openIoConfirm({
         title: '检查更新失败',
-        message: err?.message || '无法连接 GitHub，请稍后重试。',
-        confirmText: '知道了',
+        message: `${err?.message || '无法连接网络，请稍后重试。'}\n可手动打开：${RELEASES_URL}`,
+        confirmText: '打开 Releases',
         danger: true,
-        onConfirm: () => closeIoConfirm(),
+        onConfirm: () => {
+          window.open(RELEASES_URL, '_blank');
+          closeIoConfirm();
+        },
       });
     } finally {
       setUpdateBusy(false);

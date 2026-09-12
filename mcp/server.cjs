@@ -62,7 +62,7 @@ function wrap(handler) {
 
 const server = new McpServer({
   name: 'todo-desktop',
-  version: '1.1.0',
+  version: '1.1.1',
 });
 
 server.tool(
