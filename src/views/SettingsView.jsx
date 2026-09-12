@@ -180,7 +180,7 @@ export default function SettingsView({
     setIoConfirm((s) => ({ ...s, open: false, onConfirm: null }));
   };
 
-  const CURRENT_VERSION = '1.0.0';
+  const CURRENT_VERSION = '1.1.0';
 
   function parseVersion(v) {
     return String(v || '')
