@@ -9,7 +9,14 @@ Windows 本地待办管理桌面工具（Electron + React + SQLite）。
 - **每周**：按周一～周日分列看板，可按天添加任务
 - **日历**：月视图选日查看，点击日期右侧显示当日任务
 - **项目**：按项目分组看板，支持新建 / 编辑 / 删除项目与颜色
+- **琐事**：本地备忘，支持分类、置顶、归档
 - 任务支持：新建、编辑、删除、完成切换、状态（待办/进行中/已完成）、紧急程度（紧急/高/中/低）、截止日期、备注、所属项目
+
+## 界面预览
+
+![界面预览 1](docs/images/app-screenshot-1.png)
+
+![界面预览 2](docs/images/app-screenshot-2.png)
 
 ## 环境要求
 
@@ -33,17 +40,14 @@ npm run dev
 
 ## 数据位置
 
-SQLite 数据库保存在 Electron 用户数据目录：
+- 打包版：`%APPDATA%\Todo Desk\data\todo.db`
+- 开发模式：`%APPDATA%\todo-desktop-dev\data\todo.db`
 
-`%APPDATA%/todo-desktop/data/todo.db`
-
-可直接备份该文件。
+可直接备份该文件，也可在设置中导出 JSON。
 
 ## 技术栈
 
 - Electron 36
 - React 19 + Vite 6
 - Node 内置 `node:sqlite`（无需额外原生编译）
-- ![image-20260912124551363](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20260912124551363.png)
-
-![image-20260912124522717](C:\Users\Administrator\AppData\Roaming\Typora\typora-user-images\image-20260912124522717.png)
+- 可选：MCP Server，供 AI 工具读写本机数据
