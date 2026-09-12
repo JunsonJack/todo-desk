@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+dist/
+release/
+out/
+build/
+!build/icon.ico
+
+# Logs
+*.log
+app-stdout.log
+app-stderr.log
+electron-stdout.log
+electron-stderr.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Temp / test artifacts
+.tmp*
+.smoke-userdata/
+*.db
+*.db-shm
+*.db-wal
+
+# Electron
+*.asar

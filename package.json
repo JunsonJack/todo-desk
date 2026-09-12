@@ -1,0 +1,81 @@
+{
+  "name": "todo-desktop",
+  "productName": "Todo Desk",
+  "version": "1.0.0",
+  "description": "本地待办管理工具 - 日历/今日/每周/项目看板",
+  "author": "Todo Desk",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "dev:renderer": "vite",
+    "dev:electron": "wait-on tcp:5173 && cross-env NODE_ENV=development electron .",
+    "build": "vite build",
+    "start": "npm run build && electron .",
+    "mcp": "node mcp/server.cjs",
+    "dist:win": "npm run build && electron-builder --win"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@vitejs/plugin-react": "^4.5.2",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^36.4.0",
+    "electron-builder": "^26.15.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "vite": "^6.3.5",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.tododesk.app",
+    "productName": "Todo Desk",
+    "copyright": "Copyright © 2026 Todo Desk",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Todo Desk"
+    },
+    "fileAssociations": []
+  },
+  "allowScripts": {
+    "electron@36.9.5": true,
+    "esbuild@0.25.12": true,
+    "electron-builder@26.15.3": true,
+    "app-builder-lib@26.15.3": true,
+    "builder-util@26.15.3": true,
+    "electron-publish@26.15.3": true,
+    "dmg-builder@26.15.3": true,
+    "electron-winstaller@5.4.0": true
+  }
+}
